@@ -1,0 +1,335 @@
+<html>
+
+<head>
+	<title>CAP4730 / Painful Paint Program</title>
+
+	<script>
+	
+	// Cap4730 / Painful Paint Program
+	// Source for "PainfulPaintProgram.html"
+	// Kasonic, Courtney
+
+	// Hit 'spacebar' to stop drawing
+	// ~ ~ ~ ~ ~
+
+	// Initialize texts for vertex shader and fragment shader
+	var vertexShaderText = 
+	[
+	'precision mediump float;',
+	'',
+	'attribute vec2 vertPosition;',
+	'attribute vec3 vertColor;',
+	'varying vec3 fragColor;',
+	'void main()',
+	'{',
+	'	fragColor = vertColor;',
+	'	gl_Position = vec4(vertPosition,0.0,1.0);',
+	'}'
+	].join("\n");
+	
+	var fragmentShaderText = 
+	[
+	'precision mediump float;',
+	'varying vec3 fragColor;',
+	'void main()',
+	'{',
+	'	gl_FragColor = vec4(fragColor,1.0);',
+	'}'
+	].join('\n');
+
+	// Initialize WebGL
+	function initializeGL()
+	{
+		var canvas = document.getElementById("userScreen");	
+		var gl =  canvas.getContext("webgl")||c.getContext("experimental-webgl");
+
+		if(!gl)
+		{
+			alert("WEBGL IS NOT AVAILABLE");
+		}
+
+		gl.viewport(0,0,canvas.width, canvas.height);
+		gl.clearColor(0.5, 0.9, 0.6,1.0);
+		gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+		return gl;
+	}
+	
+	function initializeShaders(gl)
+	{
+		//Setup shaders
+		var vertexShader = gl.createShader(gl.VERTEX_SHADER);
+		var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+		
+		gl.shaderSource(vertexShader, vertexShaderText);
+		gl.shaderSource(fragmentShader, fragmentShaderText);
+
+		gl.compileShader(vertexShader);
+		if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS))
+		{
+			console.log("ERROR: vertex shader not working :C",gl.getShaderInfoLog(vertexShader));
+		}
+
+		gl.compileShader(fragmentShader);
+		if (!gl.getShaderParameter(fragmentShader,gl.COMPILE_STATUS))
+		{
+			console.log("ERROR: fragment shader not working :C",gl.getShaderInfoLog(fragmentShader));
+		}
+		
+		//Setup program
+		var program = gl.createProgram();
+		gl.attachShader(program, vertexShader);
+		gl.attachShader(program, fragmentShader);
+		gl.linkProgram(program);
+		if (!gl.getProgramParameter(program, gl.LINK_STATUS))
+		{
+			console.error("ERROR: program not linking :C", gl.getShaderInfoLog(program));
+		}
+
+		gl.validateProgram(program);
+		if (!gl.getProgramParameter(program, gl.VALIDATE_STATUS))
+		{
+			console.error("ERROR: program not validated :C", gl.getShaderInfoLog(program));
+		}
+		return program;
+	};
+	
+	function setupVertices(gl,program)
+	{
+		var triangleVertexBufferObject = gl.createBuffer();
+		gl.bindBuffer(gl.ARRAY_BUFFER,triangleVertexBufferObject);
+		//gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(triangleVertices),gl.STATIC_DRAW);
+		
+		var positionAttributeLocation = gl.getAttribLocation(program, 'vertPosition');
+		var colorAttributeLocation = gl.getAttribLocation(program, 'vertColor');
+		gl.vertexAttribPointer(
+		positionAttributeLocation, //ATTRIBUTE LOCATION
+		2, //NUMBER of elements per attribute
+		gl.FLOAT, //TYPES OF ELEMENTS
+		gl.FALSE,
+		5*Float32Array.BYTES_PER_ELEMENT, //SIZE OF AN INDIVIDUAL VERTEX
+		0 //OFFSET
+		);
+		
+		
+		gl.vertexAttribPointer(
+		colorAttributeLocation, //ATTRIBUTE LOCATION
+		3, //NUMBER of elements per attribute
+		gl.FLOAT, //TYPES OF ELEMENTS
+		gl.FALSE,
+		5*Float32Array.BYTES_PER_ELEMENT, //SIZE OF AN INDIVIDUAL VERTEX
+		2*Float32Array.BYTES_PER_ELEMENT //OFFSET
+		);
+		
+		gl.enableVertexAttribArray(positionAttributeLocation);
+		gl.enableVertexAttribArray(colorAttributeLocation);
+	};
+
+	//This will render all complete objects
+	//Useful because we don't have to call it unless an object is finished OR if a cursor is being drawn
+	function renderComplete()
+	{
+		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+		for (i = 0; i < myShapes.length; i++)
+		{
+			myShapes[i].render();
+		}
+	};
+	
+
+	//A helper function 
+	//Remember instead of copying and pasting code use helper functions to make
+	//Your life easier.
+	//You should modify this to make the color whatever the input value is on html.
+	//You could also send the color in as paramters if you wanted to.
+
+	function pushPoint(x, y, vertices) // Can put colors[0] here or put in global var of color selected by user
+	{
+		vertices.push(x);
+		vertices.push(y);
+		vertices.push(rColor);
+		vertices.push(bColor);
+		vertices.push(gColor);
+	};
+	
+	
+	//For my code to work
+	//All shape classes must have this.vertices for the points
+	//addPoint(xn, and yn)
+	//Initialize with two paramaters 
+	//have a render method.
+	//Have a draw cursor method.
+	function Rectangle(initX, initY)
+	{
+		this.vertices = [];
+		pushPoint(initX,initY,this.vertices);
+		this.isFinished = false;
+		this.isOutline = false;
+		this.addPoint = function(xn,yn)
+		{
+			pushPoint(xn,this.vertices[1],this.vertices);
+			pushPoint(xn,yn,this.vertices);
+			pushPoint(this.vertices[0],yn,this.vertices);
+			this.isFinished = true;//This should be from the current input on the HTML (use 'spacebar' to set this.isFinished=true; when done with n-polygon)
+			renderComplete();
+		}
+		this.render = function()
+		{
+			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.vertices),gl.STATIC_DRAW);
+			if(this.isOutline)
+			{
+			gl.drawArrays(gl.LINE_LOOP,0,this.vertices.length/5);
+			}
+			else
+			{
+			gl.drawArrays(gl.TRIANGLE_FAN,0,this.vertices.length/5);
+			}
+		}
+		this.drawCursor = function(cx,cy)
+		{
+			pushPoint(cx,this.vertices[1],this.vertices);
+			pushPoint(cx,cy,this.vertices);
+			pushPoint(this.vertices[0],cy,this.vertices);
+			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.vertices),gl.STATIC_DRAW);
+			gl.drawArrays(gl.LINE_LOOP,0,this.vertices.length/5);
+			//Remove the temporary points
+			for(i =0; i < 15; i ++)
+			{
+			this.vertices.pop();
+			}
+		}
+	
+	}
+
+	// LINE() CODE HERE
+	
+	function canvasM()
+	{
+		currentX = -1 + 2*event.clientX/canvas.width;
+		//This is a typo in the book.
+		currentY = -1 + 2*(canvas.height - event.clientY)/canvas.height;
+		console.log(currentX + "," + currentY);
+	}
+	
+	function canvasH()
+	{
+		// From the book (thank you for fixing the typo)
+		var x = -1 + 2*event.clientX/canvas.width;
+		var y = -1 + 2*(canvas.height - event.clientY)/canvas.height;
+
+		//check to see if you are drawing an object or not
+		if (myShapes.length > 0 && myShapes[myShapes.length-1].isFinished == false )
+		{
+			//It doesn't matter what shape you are working on as long as it has a addPoint method.
+			myShapes[myShapes.length-1].addPoint(x, y);
+		}
+		else
+		{
+			// start a new shape.
+			//This should be a if, else if else or a switch 
+			//To initialize different shapes.
+
+				//var userShape = document.getElementById("shapeMenu");
+				if (shapeChoice == ('line'))
+					{ myShapes[myShapes.length] = new Line(x, y); }
+				if (shapeChoice == ('triangle'))
+					{ myShapes[myShapes.length] = new Triangle(x, y); }
+				if (shapeChoice == ('rectangle'))
+					{ myShapes[myShapes.length] = new Rectangle(x, y); }
+				if (shapeChoice == ('nPolygon'))
+					{ myShapes[myShapes.length] = new nPolygon(x, y); }
+				if (shapeChoice == ('circle'))
+					{ myShapes[myShapes.length] = new Circle(x, y); }
+
+			//myShapes[myShapes.length] = new Rectangle(x, y);
+		}
+	
+	};
+
+	function canvasM()
+	{
+		currentX = -1 + 2*event.clientX/canvas.width;
+		currentY = -1 + 2*(canvas.height - event.clientY)/canvas.height;
+		console.log(currentX + "," + currentY);
+	};
+	
+	// Stop drawing
+	/*canvas.onkeydown = function(event)
+	{
+		var key = String.fromCharCode(event.keyCode);
+		if (key == 'spacebar') {
+			gl.clear(gl.CLEAR_BUFFER_BIT);
+		}
+	};*/
+
+	</script>
+
+</head>
+
+<body>
+	<canvas id = "userScreen" width = "700" height = "500">
+		Your browser does not support HTML5.
+	</canvas>
+
+	<script>
+
+	// Global vars
+	// ~ ~ ~ ~ ~
+	var gl = initializeGL();
+	var program = initializeShaders(gl);
+	setupVertices(gl, program);
+	var currentX = 0;
+	var currentY = 0;
+	var canvas = document.getElementById("userScreen");
+	canvas.addEventListener("click", canvasH);
+	canvas.addEventListener("mousemove", canvasM);
+	gl.useProgram(program);
+
+	var myShapes = [];
+
+	// Choose color
+	var colors =
+	[
+		1.0, 0.0, 0.0, // red
+		0.8, 0.3, 0.0, // orange
+		0.7, 0.5, 0.0, //yellow
+		0.0, 1.0, 0.0, // green
+		0.0, 0.0, 1.0, // blue
+		0.6, 0.0, 0.4  // purple
+	];
+
+	var shapeChoice = prompt("Choose to draw: line, triangle, rectangle, n-polygon, circle");
+
+	var rColor = prompt("Enter decimal for red color (0-1): ");
+	var gColor = prompt("Enter decimal for green color (0-1): ");
+	var bColor = prompt("Enter decimal for blue color (0-1): ");
+
+	var loop = function()
+	{
+		if (myShapes.length > 0 && myShapes[myShapes.length-1].isFinished == false)
+		{
+			// Clear screen and render each shape
+			renderComplete()
+			myShapes[myShapes.length-1].drawCursor(currentX, currentY);
+		}
+
+		requestAnimationFrame(loop);
+	};
+
+	requestAnimationFrame(loop);
+
+</script>
+
+	<br/>
+	<b>Choose what to draw and its color:</b>
+
+	<form id ="shapeMenu">
+  		<input type="radio" name="shape" id="line" checked> Line<br>
+  		<input type="radio" name="shape" id="triangle"> Triangle<br>
+  		<input type="radio" name="shape" id="rectangle"> Rectangle<br>
+  		<input type="radio" name="shape" id="nPolygon"> N-Point Polygon<br>
+  		<input type="radio" name="shape" id="circle"> Circle<br><br>
+  		<input type="submit">
+	</form>
+</body>
+
+</html>
